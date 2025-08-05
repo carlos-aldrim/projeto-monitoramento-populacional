@@ -17,7 +17,8 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -28,7 +29,7 @@ services:
     depends_on:
       - kafka
     environment:
-      KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     command: python producer.py
 
   consumer:
@@ -36,13 +37,42 @@ services:
     depends_on:
       - kafka
     environment:
-      KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     command: python consumer.py
+
+  consumer_raw_writer:
+    build: .
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MAX_RAW_FILES:   10      
+      RAW_RUN_SECONDS: 60
+    volumes:
+      - ./datalake/raw:/app/datalake/raw
+    command: python consumer_raw_writer.py
+
 
   create-topics:
     build: .
     depends_on:
       - kafka
     environment:
-      KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     command: python create_topics.py
+
+  converter:
+    build: .
+    depends_on:
+      - consumer_raw_writer
+    volumes:
+      - ./datalake/raw:/app/datalake/raw
+      - ./datalake/processed:/app/datalake/processed
+    command: python convert_to_parquet.py
+
+  dw_loader:
+    build: .
+    depends_on:
+      - converter
+    volumes:
+      - ./datalake/processed:/app/datalake/processed
+      - ./datawarehouse:/app/datawarehouse
+    command: python init_datawarehouse.py
