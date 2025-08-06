@@ -44,12 +44,11 @@ services:
     build: .
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      MAX_RAW_FILES:   10      
+      MAX_RAW_FILES: 10      
       RAW_RUN_SECONDS: 60
     volumes:
       - ./datalake/raw:/app/datalake/raw
     command: python consumer_raw_writer.py
-
 
   create-topics:
     build: .
@@ -76,3 +75,16 @@ services:
       - ./datalake/processed:/app/datalake/processed
       - ./datawarehouse:/app/datawarehouse
     command: python init_datawarehouse.py
+
+  spark-transform:
+    image: bitnami/spark:latest
+    depends_on:
+      - converter
+    volumes:
+      - ./datawarehouse:/app/datawarehouse
+      - ./datalake:/app/datalake
+      - ./tmp:/tmp/spark-temp
+      - ./artifacts:/app/artifacts       # <-- Montagem do volume para artifacts
+      - ./transform_data.py:/app/transform_data.py
+    working_dir: /app
+    command: spark-submit transform_data.py
